@@ -1,8 +1,13 @@
 #include <SoftwareSerial.h>
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h> // Library for LCD
+#include "GoPowerInverter.h"
+
 
 SoftwareSerial mySerial(12,13); //RX, TX
 
-#include "GoPowerInverter.h"
+LiquidCrystal_I2C lcd = LiquidCrystal_I2C(0x27, 20, 4); // Change to (0x27,20,4) for 20x4 LCD.
+
 
 enum errCodes {
   success,
@@ -20,13 +25,17 @@ struct invResponse {
 const int psPin=5;
 const int buttonPin=2;
 const int ledPin=3;
+volatile bool readyState=false;
 
 invResponse invResp;
 
 //GoPowerInverter myGPI(12,13); //TX.RX
 
 void setup() {
-  pinMode(buttonPin, INPUT);
+  lcd.init();
+  lcd.backlight();
+  
+  pinMode(buttonPin, INPUT_PULLUP);
   pinMode(ledPin, OUTPUT);
   pinMode(psPin, OUTPUT);
   digitalWrite(psPin, HIGH);
@@ -40,21 +49,30 @@ void setup() {
   mySerial.begin(19200);
   Serial.println();
   Serial.println("Starting...");
-  
+  lcd.setCursor(0,0);
+  lcd.print("Starting...");
 
 
-
+/*
   while(digitalRead(buttonPin))
   {
     delay(100);
   }
   delay(100); //wait for any debounce
+*/
 
   blinkLED(4);  
 
   
-  //digitalWrite(ledPin, LOW);
-  
+  printLabels();
+
+  attachInterrupt(digitalPinToInterrupt(buttonPin),buttonPushed,FALLING);
+}
+
+
+void buttonPushed() {
+  if(readyState && millis()>2000)
+    digitalWrite(psPin, LOW);
 }
 
 
@@ -78,22 +96,26 @@ void loop() {
 }
 */
 
-void loop() {
-  // put your main code here, to run repeatedly:
-  if(digitalRead(buttonPin))
-  {
-    //digitalWrite(psPin, LOW); //Turn off the microcontroller
-  }
+float vinv;
+float vbat;
+float frq;
+float iinv;
+float pinv;
 
+
+void loop() {
+  readyState=true;
   
   queryInvValue(&invResp, "VBAT");
   Serial.print("Battery Voltage: ");
   Serial.println(invResp.returnValue);
   //SerialPrintError(&invResp);
-
+  vbat = invResp.returnValue;
+  
   queryInvValue(&invResp, "VINV");
   Serial.print("Inverter Voltage: ");
   Serial.println(invResp.returnValue);
+  vinv = invResp.returnValue;
 
   if(invResp.returnValue<10) {
     Serial.print("Powering on...");
@@ -104,21 +126,78 @@ void loop() {
   queryInvValue(&invResp, "FRQ");
   Serial.print("Frequency: ");
   Serial.println(invResp.returnValue);
-  
+  frq = invResp.returnValue;
+
   queryInvValue(&invResp, "IINV");
   Serial.print("Inverter Current: ");
   Serial.println(invResp.returnValue);
+  iinv = invResp.returnValue;
 
   queryInvValue(&invResp, "PINV");
   Serial.print("Inverter Power: ");
   Serial.println(invResp.returnValue);
+  pinv = invResp.returnValue;
 
   
   Serial.println("=======================");
 
   delay(1000);
 
+  printToLCD();
+
 }
+
+void printLabels()
+{
+  lcd.clear();
+  //vinv
+  lcd.setCursor(0,0);
+  lcd.print("VINV:");
+
+  //vbat
+  lcd.setCursor(0, 1);
+  lcd.print("VBAT:");
+
+  //frq
+  lcd.setCursor(0, 2);
+  lcd.print("FREQ:");
+
+  //iinv
+  lcd.setCursor(0, 3);
+  lcd.print("I:");
+
+  //pinv
+  lcd.setCursor(8, 3);
+  lcd.print("P:");
+
+}
+
+void printToLCD()
+{
+
+  //vinv
+  lcd.setCursor(6, 0);
+  lcd.print(vinv);
+
+  //vbat
+  lcd.setCursor(6, 1);
+  lcd.print(vbat);
+
+  //frq
+  lcd.setCursor(6, 2);
+  lcd.print(frq);
+
+  //iinv
+  lcd.setCursor(3, 3);
+  lcd.print(iinv);
+
+  //pinv
+  lcd.setCursor(10, 3);
+  lcd.print(pinv);
+
+}
+
+
 
 void SerialPrintError(invResponse *resp)
 {
@@ -189,6 +268,3 @@ void queryInvValue(invResponse *resp, String Verb)
       break;
   }
 }
-
-
-
