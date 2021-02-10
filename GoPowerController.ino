@@ -1,10 +1,10 @@
-#include <SoftwareSerial.h>
+//#include <SoftwareSerial.h>
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h> // Library for LCD
 #include "GoPowerInverter.h"
 
 
-SoftwareSerial mySerial(12,13); //RX, TX
+//SoftwareSerial mySerial(12,13); //RX, TX
 
 LiquidCrystal_I2C lcd = LiquidCrystal_I2C(0x27, 20, 4); // Change to (0x27,20,4) for 20x4 LCD.
 
@@ -23,8 +23,8 @@ struct invResponse {
 
 
 const int psPin=5;
-const int buttonPin=2;
-const int ledPin=3;
+const int buttonPin=3;
+const int ledPin=12;
 volatile bool readyState=false;
 
 invResponse invResp;
@@ -35,32 +35,25 @@ void setup() {
   lcd.init();
   lcd.backlight();
   
-  pinMode(buttonPin, INPUT_PULLUP);
+  pinMode(buttonPin, INPUT);
   pinMode(ledPin, OUTPUT);
   pinMode(psPin, OUTPUT);
   digitalWrite(psPin, HIGH);
   
-  Serial.begin(115200);
   digitalWrite(ledPin, HIGH);
 
   //myGPI.begin(19200);
   
   
-  mySerial.begin(19200);
-  Serial.println();
-  Serial.println("Starting...");
+  Serial.begin(19200);
   lcd.setCursor(0,0);
   lcd.print("Starting...");
 
 
-/*
-  while(digitalRead(buttonPin))
+  while(digitalRead(buttonPin)==HIGH) //Wait for user to let go of button
   {
     delay(100);
   }
-  delay(100); //wait for any debounce
-*/
-
   blinkLED(4);  
 
   
@@ -71,7 +64,7 @@ void setup() {
 
 
 void buttonPushed() {
-  if(readyState && millis()>2000)
+  if(readyState)
     digitalWrite(psPin, LOW);
 }
 
@@ -104,42 +97,27 @@ float pinv;
 
 
 void loop() {
-  readyState=true;
+  if(millis() > 2000)
+    readyState=true;
   
   queryInvValue(&invResp, "VBAT");
-  Serial.print("Battery Voltage: ");
-  Serial.println(invResp.returnValue);
-  //SerialPrintError(&invResp);
   vbat = invResp.returnValue;
   
   queryInvValue(&invResp, "VINV");
-  Serial.print("Inverter Voltage: ");
-  Serial.println(invResp.returnValue);
   vinv = invResp.returnValue;
 
   if(invResp.returnValue<10) {
-    Serial.print("Powering on...");
     sendInvCommand(&invResp, "POWER 1");
-    SerialPrintError(&invResp);
   }
   
   queryInvValue(&invResp, "FRQ");
-  Serial.print("Frequency: ");
-  Serial.println(invResp.returnValue);
   frq = invResp.returnValue;
 
   queryInvValue(&invResp, "IINV");
-  Serial.print("Inverter Current: ");
-  Serial.println(invResp.returnValue);
   iinv = invResp.returnValue;
 
   queryInvValue(&invResp, "PINV");
-  Serial.print("Inverter Power: ");
-  Serial.println(invResp.returnValue);
   pinv = invResp.returnValue;
-
-  
-  Serial.println("=======================");
 
   delay(1000);
 
@@ -204,13 +182,13 @@ void SerialPrintError(invResponse *resp)
   switch(resp->errorCode)
   {
     case success:
-      Serial.println("Success!");
+      //Serial.println("Success!");
       break;
     case unknown:
-      Serial.println("Unknown!");
+      //Serial.println("Unknown!");
       break;
     case error:
-      Serial.println("Error!");
+      //Serial.println("Error!");
       break;
   }
 }
@@ -219,9 +197,9 @@ void sendInvCommand(invResponse *resp, String Command)
 {
   String respVal = "-1";
   String errCode = "00";
-  mySerial.println(Command);
+  Serial.println(Command);
   
-  errCode = mySerial.readStringUntil('\n'); //Flush out error code waiting in buffer
+  errCode = Serial.readStringUntil('\n'); //Flush out error code waiting in buffer
   errCode.trim();
   switch(errCode.charAt(0))
   {
@@ -244,13 +222,13 @@ void queryInvValue(invResponse *resp, String Verb)
 {
   String respVal = "-1";
   String errCode = "00";
-  mySerial.print(Verb);mySerial.println("?");
+  Serial.print(Verb);Serial.println("?");
   
-  respVal = mySerial.readStringUntil('\n');
+  respVal = Serial.readStringUntil('\n');
   respVal.trim();
   resp->returnValue = respVal.toFloat();
   
-  errCode = mySerial.readStringUntil('\n'); //Flush out error code waiting in buffer
+  errCode = Serial.readStringUntil('\n'); //Flush out error code waiting in buffer
   errCode.trim();
   switch(errCode.charAt(0))
   {
